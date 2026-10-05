@@ -6,12 +6,13 @@ import (
 	"slices"
 	"sync"
 
-	options "github.com/zrygan/prime_number_search/options"
+	"github.com/zrygan/prime_number_search/options"
+	"github.com/zrygan/prime_number_search/util"
 )
 
 // ByRange implements Scheme 1:
 // Straight division of the search range [0, cfg.Y] into chunks across cfg.X threads.
-func ByRange(cfg options.Config, printType options.PrintConfig) []int {
+func ByRange(cfg options.Config, printType options.PrintConfig) {
 	limit := cfg.Y + 1
 	scope := int(math.Ceil(float64(limit) / float64(cfg.X)))
 
@@ -31,7 +32,7 @@ func ByRange(cfg options.Config, printType options.PrintConfig) []int {
 			defer wg.Done()
 
 			// Each worker has its own blob
-			isr, err := IntStackRange(minS, maxS)
+			isr, err := util.IntStackRange(minS, maxS)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -39,12 +40,13 @@ func ByRange(cfg options.Config, printType options.PrintConfig) []int {
 			for !isr.IsEmpty() {
 				if curr, err := isr.Pop(); err == nil {
 					if TrialDivision(curr) {
-						mu.Lock()
-						found = append(found, curr)
 						if printType == options.Now {
 							log.Printf("[Thread %d] Found prime: %d", workerID, curr)
+						} else {
+							mu.Lock()
+							found = append(found, curr)
+							mu.Unlock()
 						}
-						mu.Unlock()
 					}
 				}
 			}
@@ -53,9 +55,8 @@ func ByRange(cfg options.Config, printType options.PrintConfig) []int {
 
 	wg.Wait()
 
-	slices.Sort(found)
 	if printType == options.Later {
+		slices.Sort(found)
 		log.Printf("All threads completed. Found %d primes: %v", len(found), found)
 	}
-	return found
 }
