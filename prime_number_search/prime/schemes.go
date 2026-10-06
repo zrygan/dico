@@ -9,12 +9,9 @@ import (
 	"github.com/zrygan/prime_number_search/util"
 )
 
-// The smallest prime, so the search space is [searchStart, cfg.Y].
 const searchStart = 2
 
-// Scheme 1 (coarse-grained): straight division of the search range
-// [2, cfg.Y] into chunks across cfg.X threads. Each thread tests the numbers
-// in its own chunk sequentially.
+// ByRange divides the search range [2, cfg.Y] evenly across cfg.X threads.
 func ByRange(cfg options.Config, printType options.PrintConfig) {
 	limit := cfg.Y + 1
 	scope := int(math.Ceil(float64(limit-searchStart) / float64(cfg.X)))
@@ -34,7 +31,6 @@ func ByRange(cfg options.Config, printType options.PrintConfig) {
 		go func(workerID, minS, maxS int) {
 			defer wg.Done()
 
-			// Each worker has its own blob
 			isr, err := util.IntStackRange(minS, maxS)
 			if err != nil {
 				log.Panic(err)
@@ -63,8 +59,7 @@ func ByRange(cfg options.Config, printType options.PrintConfig) {
 	}
 }
 
-// Scheme 2 (fine-grained): linear search across the numbers [2, cfg.Y],
-// where the divisors of each number are split across cfg.X threads.
+// ByDivisors tests numbers from 2 to cfg.Y one by one, dividing candidate divisors across cfg.X threads.
 func ByDivisors(cfg options.Config, printType options.PrintConfig) {
 	var found []int
 	for i := searchStart; i <= cfg.Y; i++ {

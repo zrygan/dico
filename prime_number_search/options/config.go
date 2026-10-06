@@ -7,18 +7,12 @@ import (
 	"strings"
 )
 
-// Config represents the configuration settings for the search operation.
 type Config struct {
-	X int // X specifies the number of threads to use.
-	Y int // Y sets the search upper bound, defining the search space as [0, y].
+	X int
+	Y int
 }
 
-// ReadConfig reads a configuration file specified by file_name and extracts two
-// space-separated integers representing the number of threads (x) and the
-// search upper bound (y). It returns a Config struct containing these values.
-//
-// If the file cannot be read, has fewer than two fields, or contains invalid
-// integers, the function will panic and halt the program.
+// ReadConfig reads a config file containing the thread count (x) and upper bound (y).
 func ReadConfig(file_name string) Config {
 	content, err := os.ReadFile(file_name)
 	if err != nil {

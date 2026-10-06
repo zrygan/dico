@@ -26,9 +26,7 @@ func (is *IntStack) IsEmpty() bool {
 	return len(is.items) == 0
 }
 
-// IntStackRange returns a populated IntStack which contains
-// values within the range [n,m). n and m cannot be equal and must be
-// positive numbers.
+// IntStackRange creates an IntStack with numbers from n up to m-1.
 func IntStackRange(n int, m int) (*IntStack, error) {
 	if n < 0 || m < 0 || n == m {
 		return nil, errors.New("Range for IntStackRange is invalid.")

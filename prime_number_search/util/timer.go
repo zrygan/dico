@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// TrackRuntime executes a function and logs start, end, and total runtime duration.
+// TrackRuntime logs the start and end timestamps and prints the total runtime duration.
 func TrackRuntime(taskName string, fn func()) time.Duration {
 	startTime := time.Now()
 	log.Printf("[%s] Started at: %s", taskName, startTime.Format(time.RFC3339Nano))

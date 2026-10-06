@@ -6,10 +6,7 @@ import (
 	"sync/atomic"
 )
 
-// Primality test for some integer n. It checks each odd number <
-// sqrt(n) then the divisibility of n with that number. At the first
-// number in the range that proves the compositeness of n, it
-// immediately returns false.
+// TrialDivision checks if n is prime by testing odd numbers up to sqrt(n).
 func TrialDivision(n int) bool {
 	if n <= 1 {
 		return false
@@ -35,19 +32,14 @@ func TrialDivision(n int) bool {
 	return true
 }
 
-// A threaded primality test for some integer n given x threads.
-// This checks each odd number < sqrt(n) then the divisibility of n
-// with that number. If at least one threads determines the
-// compositeness of n. The function immediately returns false.
-func ThreadedTrialDivision(n int, x int) bool {
+// ThreadedTrialDivision checks if n is prime by splitting odd divisor checks across x threads.
+// Returns whether n is prime and the ID of the thread that finished last (-1 if rejected before spawning).
+func ThreadedTrialDivision(n int, x int) (bool, int) {
 	if n <= 1 {
-		return false
+		return false, -1
 	}
-	if n == 2 {
-		return true
-	}
-	if n%2 == 0 {
-		return false
+	if n != 2 && n%2 == 0 {
+		return false, -1
 	}
 
 	sqrtN := int(math.Floor(math.Sqrt(float64(n))))
@@ -56,13 +48,21 @@ func ThreadedTrialDivision(n int, x int) bool {
 	var isPrime atomic.Bool
 	isPrime.Store(true)
 
+	var finished atomic.Int32
+	lastID := -1
+
 	for i := range x {
 		wg.Add(1)
 
 		startAt := 3 + (i * 2)
 
-		go func(curr int) {
+		go func(workerID, curr int) {
 			defer wg.Done()
+			defer func() {
+				if finished.Add(1) == int32(x) {
+					lastID = workerID
+				}
+			}()
 
 			move := x * 2
 			for curr <= sqrtN {
@@ -77,12 +77,12 @@ func ThreadedTrialDivision(n int, x int) bool {
 
 				curr += move
 			}
-		}(startAt)
+		}(i, startAt)
 	}
 
 	wg.Wait()
 
-	return isPrime.Load()
+	return isPrime.Load(), lastID
 }
 
 func divisibilityCheck(curr int, n int) bool {
