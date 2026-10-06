@@ -9,7 +9,7 @@ import (
 func main() {
 	cfg := options.ReadConfig("config")
 
-	util.TrackRuntime("Scheme 2 (Divisibility Test - Print Later)", func() {
-		prime.ByDivisibility(cfg, options.Later)
+	util.TrackRuntime("Scheme 2 (Divisor Split - Print Later)", func() {
+		prime.ByDivisors(cfg, options.Later)
 	})
 }
