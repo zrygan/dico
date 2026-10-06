@@ -44,8 +44,8 @@
 ]
 
 #pagebreak()
-== By Search Range Division
-The first scheme is to divide the search space itself.
+== By Search Range DnC
+The first scheme is to perform DnC on the search space itself.
 
 If we have $x$ threads, $(sans(T)_1,sans(T)_2, dots, sans(T)_x)$, and we want to find all primes in $sans(bold(S)) = [0, y]$. We will first partition $sans(bold(S))$ into $x$ subsequences of length $ceil(x/y)$. And we assign a unique subsequence to each of the threads.
 
@@ -61,7 +61,7 @@ The implementation of this scheme is in `range.go`.
   [
     #highlighted-code()[
       ```go
-      func ByRange(cfg options.Config, printType options.PrintConfig) []int {
+      func ByRange(cfg options.Config, printType options.PrintConfig) {
         limit := cfg.Y + 1
         scope := int(math.Ceil(float64(limit) / float64(cfg.X)))
 
@@ -69,7 +69,7 @@ The implementation of this scheme is in `range.go`.
         var found []int
         var mu sync.Mutex
 
-        // continued
+        // ByRange continued
       ```
     ]],
   [
@@ -97,7 +97,7 @@ The implementation of this scheme is in `range.go`.
 
           wg.Add(1)
       
-          // continued
+          // ByRange continued
       ```
     ]],
   [
@@ -124,7 +124,7 @@ The implementation of this scheme is in `range.go`.
 
           wg.Add(1)
       
-          // continued
+          // ByRange continued
       ```
     ]],
   [
@@ -163,7 +163,7 @@ The implementation of this scheme is in `range.go`.
           }(i, bot, top)
         }
 
-        // continued
+        // ByRange continued
       ```
     ]],
   [
@@ -201,7 +201,7 @@ The implementation of this scheme is in `range.go`.
           }(i, bot, top)
         }
 
-        // continued
+        // ByRange continued
       ```
     ]],
   [
@@ -241,7 +241,7 @@ The implementation of this scheme is in `range.go`.
           }(i, bot, top)
         }
 
-        // continued
+        // ByRange continued
       ```
     ]],
   [
@@ -281,11 +281,13 @@ The implementation of this scheme is in `range.go`.
           }(i, bot, top)
         }
 
-        // continued
+        // ByRange continued
       ```
     ]],
   [
-    Divisibility test proper.
+    Primality test proper.
+
+    The primality test is implemented via brute-force search (Trial Division). Its specifics will be discussed later.
   ],
 )
 
@@ -299,15 +301,174 @@ The implementation of this scheme is in `range.go`.
       ```go
         wg.Wait()
 
-        slices.Sort(found)
         if printType == options.Later {
+          slices.Sort(found)
           log.Printf("All threads completed. Found %d primes: %v", len(found), found)
         }
-        return found
-      } // ByRange()
+      } // ByRange
       ```
     ]],
   [
+    
+  ],
+)
 
+#pagebreak()
+== Function-level DnC
+The second scheme is to divide the work of the divisibility test.
+
+// TODO
+
+The implementation of this scheme is in `divisibility.go`.
+
+#pagebreak()
+== Function-level DnC Implementation
+#grid(
+  columns: (1.5fr, 1fr),
+  gutter: 24pt,
+  [
+    #highlighted-code()[
+      ```go
+      func ByDivisibility(cfg options.Config, printType options.PrintConfig) {
+        var found []int
+        for i := range cfg.Y + 1 {
+          if ThreadedTrialDivision(i, cfg.X) {
+            if printType == options.Now {
+              log.Printf("Found prime: %d", i)
+            } else {
+              found = append(found, i)
+            }
+          }
+        }
+
+        if printType == options.Later {
+          log.Printf("All threads completed. Found %d primes: %v", len(found), found)
+        }
+      }
+      ```
+    ]],
+  [
+    The top-level function call for this function is the usual
+    primality test.
+
+    However it calls the `ThreadedTrialDivision: bool` function instead of the
+    ordinary trial division algorithm.
+
+    The specifics of this algorithm is on the next slides.
+  ],
+)
+
+#pagebreak()
+== Function-level DnC Implementation _(cont.)_
+#grid(
+  columns: (1.5fr, 1fr),
+  gutter: 24pt,
+  [
+    #highlighted-code()[
+      ```go
+      func ThreadedTrialDivision(n int, x int) bool {
+        if n <= 1 {
+          return false
+        }
+        if n == 2 {
+          return true
+        }
+        if n%2 == 0 {
+          return false
+        }
+
+        sqrtN := int(math.Floor(math.Sqrt(float64(n))))
+
+        // ThreadedTrialDivision continued
+      ```
+    ]],
+  [
+    This section just defines the base cases and computed the square root of $n$.
+  ],
+)
+
+#pagebreak()
+== Function-level DnC Implementation _(cont.)_
+#grid(
+  columns: (1.5fr, 1fr),
+  gutter: 24pt,
+  [
+    #highlighted-code()[
+      ```go
+        var wg sync.WaitGroup
+        var isPrime atomic.Bool
+        isPrime.Store(true)
+
+        // ThreadedTrialDivision continued
+      ```
+    ]],
+  [
+  This section initializes function-level variables and synchronization tools to be used:
+    - The counting semaphore `wg WaitGroup`
+    - The shared variable `isPrime atomic.Bool`
+
+  We assume that isPrime has a value of `true` unless we find a counterexample that shows $n$ is not a prime (i.e., it is divisible by something).
+  ],
+)
+
+#pagebreak()
+== Function-level DnC Implementation _(cont.)_
+#grid(
+  columns: (1.5fr, 1fr),
+  gutter: 24pt,
+  [
+    #highlighted-code()[
+      ```go
+        for i := range x {
+          wg.Add(1)
+          startAt := 3 + (i * 2)
+
+          go func(curr int) {
+            defer wg.Done()
+            move := x * 2
+
+            for curr <= sqrtN {
+              if !isPrime.Load() {
+                return
+              }
+
+              if !divisibilityCheck(curr, n) {
+                isPrime.Store(false)
+                return
+              }
+
+              curr += move
+            }
+          }(startAt)
+        }
+
+        // ThreadedTrialDivision continued
+      ```
+    ]],
+  [
+    This section creates a Goroutine to check if some number divides the current number.
+
+    >> do this step by step later on
+  ],
+)
+
+#pagebreak()
+== Function-level DnC Implementation _(cont.)_
+#grid(
+  columns: (1.5fr, 1fr),
+  gutter: 24pt,
+  [
+    #highlighted-code()[
+      ```go
+        wg.Wait()
+
+        return isPrime.Load()
+      }
+
+      // ThreadedTrialDivision
+      ```
+    ]],
+  [
+    
   ],
 )
