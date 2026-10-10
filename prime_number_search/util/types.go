@@ -1,6 +1,9 @@
 package util
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type IntStack struct {
 	items []int
@@ -27,12 +30,13 @@ func (is *IntStack) IsEmpty() bool {
 }
 
 // IntStackRange creates an IntStack with numbers from n up to m-1.
+// The range must be non-empty and non-negative.
 func IntStackRange(n int, m int) (*IntStack, error) {
-	if n < 0 || m < 0 || n == m {
-		return nil, errors.New("Range for IntStackRange is invalid.")
+	if n < 0 || m <= n {
+		return nil, fmt.Errorf("invalid IntStackRange [%d, %d): need 0 <= n < m", n, m)
 	}
 
-	is := &IntStack{}
+	is := &IntStack{items: make([]int, 0, m-n)}
 
 	for i := n; i < m; i++ {
 		is.Push(i)

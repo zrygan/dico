@@ -1,15 +1,3 @@
-// Runs all 4 schemes (range/divisors x now/later) over a
-// set of thread counts and search bounds, and prints a table of runtimes.
-//
-// Each case runs in its own process so that it can be killed once it exceeds
-// the timeout. Once a scheme times out for some x, the larger search bounds
-// for that scheme and x are skipped.
-//
-// Log output goes to /dev/null, so the times include formatting and writing
-// each line but not the cost of a terminal displaying it.
-//
-//	go run ./cmd/perf
-//	go run ./cmd/perf -x 1,4,15 -y 1000,1000000 -timeout 5s
 package main
 
 import (
@@ -37,11 +25,16 @@ type scheme struct {
 var schemes = []scheme{
 	{"range / now", prime.ByRange, options.Now},
 	{"range / later", prime.ByRange, options.Later},
+	{"range 6k+-1 / now", prime.ByRangeSixK, options.Now},
+	{"range 6k+-1 / later", prime.ByRangeSixK, options.Later},
 	{"divisors / now", prime.ByDivisors, options.Now},
 	{"divisors / later", prime.ByDivisors, options.Later},
+	{"divisors pool / now", prime.ByDivisorsPool, options.Now},
+	{"divisors pool / later", prime.ByDivisorsPool, options.Later},
+	{"sieve (sequential) / now", prime.Sieve, options.Now},
+	{"sieve (sequential) / later", prime.Sieve, options.Later},
 }
 
-// childEnv holds "<scheme index> <x> <y>" when this process is running a single case.
 const childEnv = "PERF_CASE"
 
 func main() {
@@ -50,13 +43,20 @@ func main() {
 		return
 	}
 
-	xs := flag.String("x", "1,4,15,64", "comma-separated thread counts")
+	xs := flag.String("x", "1,4,15", "comma-separated thread counts")
 	ys := flag.String("y", "1000,100000,1000000,10000000", "comma-separated search upper bounds")
-	timeout := flag.Duration("timeout", 2*time.Second, "kill and skip a case after this long")
+	timeout := flag.Duration("timeout", 3*time.Second, "kill and skip a case after this long")
 	flag.Parse()
 
-	threads := parseInts(*xs, 1)
-	bounds := parseInts(*ys, 0)
+	if *timeout <= 0 {
+		log.Fatalf("invalid -timeout %v (must be > 0)", *timeout)
+	}
+	if flag.NArg() > 0 {
+		log.Fatalf("unexpected arguments: %v", flag.Args())
+	}
+
+	threads := parseInts("-x", *xs, options.MinThreads, options.MaxThreads)
+	bounds := parseInts("-y", *ys, options.MinBound, options.MaxBound)
 
 	self, err := os.Executable()
 	if err != nil {
@@ -125,8 +125,13 @@ func spawnCase(self string, idx, x, y int, timeout time.Duration) (time.Duration
 // Runs one case in this process and prints its runtime in nanoseconds.
 func runCase(c string) {
 	var idx, x, y int
-	if _, err := fmt.Sscan(c, &idx, &x, &y); err != nil || idx < 0 || idx >= len(schemes) {
+	var extra string
+	if n, _ := fmt.Sscan(c, &idx, &x, &y, &extra); n != 3 || idx < 0 || idx >= len(schemes) {
 		log.Fatalf("invalid %s=%q", childEnv, c)
+	}
+	cfg := options.Config{X: x, Y: y}
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid %s=%q: %v", childEnv, c, err)
 	}
 
 	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -139,16 +144,16 @@ func runCase(c string) {
 
 	s := schemes[idx]
 	start := time.Now()
-	s.run(options.Config{X: x, Y: y}, s.printType)
+	s.run(cfg, s.printType)
 	fmt.Println(time.Since(start).Nanoseconds())
 }
 
-func parseInts(s string, minimum int) []int {
+func parseInts(flagName, s string, minimum, maximum int) []int {
 	var nums []int
 	for _, f := range strings.Split(s, ",") {
 		n, err := strconv.Atoi(strings.TrimSpace(f))
-		if err != nil || n < minimum {
-			log.Fatalf("invalid value %q (must be an integer >= %d)", f, minimum)
+		if err != nil || n < minimum || n > maximum {
+			log.Fatalf("invalid %s value %q (must be an integer from %d to %d)", flagName, f, minimum, maximum)
 		}
 		nums = append(nums, n)
 	}

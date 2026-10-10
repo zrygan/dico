@@ -1,6 +1,7 @@
 package prime
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -32,9 +33,38 @@ func TrialDivision(n int) bool {
 	return true
 }
 
+// SixKTrialDivision checks if n is prime using the 6k±1 rule: every prime above 3 has the
+// form 6k-1 or 6k+1, so after ruling out 2 and 3 only those divisors need testing.
+func SixKTrialDivision(n int) bool {
+	if n <= 1 {
+		return false
+	}
+	if n <= 3 {
+		return true
+	}
+	if n%2 == 0 || n%3 == 0 {
+		return false
+	}
+
+	sqrtN := int(math.Floor(math.Sqrt(float64(n))))
+
+	// curr is 6k-1 and curr+2 is 6k+1.
+	for curr := 5; curr <= sqrtN; curr += 6 {
+		if !divisibilityCheck(curr, n) || !divisibilityCheck(curr+2, n) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // ThreadedTrialDivision checks if n is prime by splitting odd divisor checks across x threads.
 // Returns whether n is prime and the ID of the thread that finished last (-1 if rejected before spawning).
 func ThreadedTrialDivision(n int, x int) (bool, int) {
+	// With no threads nothing would be tested, and every odd n would be reported prime.
+	if x < 1 || x > math.MaxInt32 {
+		panic(fmt.Sprintf("ThreadedTrialDivision: thread count must be between 1 and %d, got %d", math.MaxInt32, x))
+	}
 	if n <= 1 {
 		return false, -1
 	}
