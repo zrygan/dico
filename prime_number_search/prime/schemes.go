@@ -22,6 +22,7 @@ func ByRangeSixK(cfg options.Config, printType options.PrintConfig) {
 }
 
 // byRange runs the range division scheme, testing each number with isPrime.
+// This is an inner function, called by ByRange or ByRangeSixK
 func byRange(cfg options.Config, printType options.PrintConfig, isPrime func(int) bool) {
 	mustValidate(cfg, printType)
 
@@ -91,6 +92,7 @@ func ByDivisorsPool(cfg options.Config, printType options.PrintConfig) {
 }
 
 // byDivisors runs the linear search over [2, cfg.Y], testing each number with test.
+// This is an inner function, called by ByDivisors or ByDivisorsPool
 func byDivisors(cfg options.Config, printType options.PrintConfig, test func(int) (bool, int)) {
 	var found []int
 	for i := searchStart; i <= cfg.Y; i++ {

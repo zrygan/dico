@@ -778,7 +778,7 @@ The division of work is identical to Scheme 2; only the thread lifecycle changes
 )
 
 #pagebreak()
-== Baseline: Sequential Sieve of Eratosthenes
+== Additional Test: Sieve of Eratosthenes
 We also test the threaded algorithms against a single-threaded sieve of Eratosthenes (`prime.Sieve`).
 #align(center)[
   #text(size: 14pt)[
@@ -807,4 +807,3 @@ We also test the threaded algorithms against a single-threaded sieve of Eratosth
 - Spawning threads in an inner loop (Scheme 2) creates severe join bottlenecks and memory thrashing.
 - Immediate printing interleaves output and incurs synchronization/buffering overhead compared to deferred printing.
 - Cutting work per candidate (6k ± 1) helped; reusing threads (pool) did not remove the per-candidate barrier.
-- A sequential sieve was about 5× faster than the best threaded trial-division scheme at $Y = 10"M"$.

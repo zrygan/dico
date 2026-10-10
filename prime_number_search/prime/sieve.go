@@ -6,8 +6,7 @@ import (
 	"github.com/zrygan/prime_number_search/options"
 )
 
-// Sieve finds every prime in [2, cfg.Y] with a sequential sieve of Eratosthenes.
-// It runs on a single thread and ignores cfg.X; it is the baseline for the threaded schemes.
+// Sieve of Eratosthenes implementation. Not threaded so ignores cfg.X.
 func Sieve(cfg options.Config, printType options.PrintConfig) {
 	mustValidate(cfg, printType)
 
