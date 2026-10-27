@@ -31,7 +31,7 @@
 
 // Title Slide
 #align(center + horizon)[
-  #text(size: 40pt, weight: "bold")[LFG Dungeon Queue]
+  #text(size: 40pt, weight: "bold")[Dungeon Queue]
 
   #v(8pt)
   #text(size: 20pt, fill: rgb("#6b7280"))[Zhean Robby Ganituen]
@@ -44,7 +44,7 @@
 ]
 
 #pagebreak()
-== LFG Dungeon Queuing
+== Dungeon Queuing
 An MMORPG queues tank, healer and DPS players and sends them into dungeon instances as parties.
 
 - At most $n$ instances can be active at once, so at most $n$ parties are in a dungeon.
@@ -80,14 +80,64 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
 #pagebreak()
 
 #align(center + horizon)[
+  = What Can Go Wrong
+]
+
+#pagebreak()
+== How a Deadlock Can Happen
+#grid(
+  columns: (1fr, 1fr),
+  gutter: 24pt,
+  [
+    #set text(size: 16pt)
+    *Half-built parties.* Players join parties one at a time. With 1 tank, 1 healer and 6 DPS:
+    - Party A takes the tank and 3 DPS, then waits for a healer.
+    - Party B takes the healer and 3 DPS, then waits for a tank.
+
+    Each holds what the other needs, so neither ever forms, even though there are enough players for one party.
+
+    *Instances reserved too early.* If a party claims an instance and *then* waits for missing players, $n$ incomplete parties can hold all $n$ instances and no one can enter.
+  ],
+  [
+    #set text(size: 16pt)
+    #text(size: 13pt)[
+      ```text
+      Party A --needs healer--> Party B
+      (tank)                   (healer)
+         ^                        |
+         +-------needs tank-------+
+      ```
+    ]
+
+    All four Coffman conditions hold:
+    - *Mutual exclusion:* a player is in one party.
+    - *Hold and wait:* a party keeps its players while waiting.
+    - *No preemption:* players are never taken back.
+    - *Circular wait:* A waits on B, B waits on A.
+  ],
+)
+
+#pagebreak()
+== How Starvation Can Happen
+#set text(size: 18pt)
+Starvation is when a party *could* run but never gets an instance.
+
+- *Unfair selection.* If a free instance takes any waiting party (random, LIFO, or whichever goroutine wins a lock), an unlucky party can be passed over again and again.
+- *An instance that never frees up.* With unbounded clear times, or a lock held while a party clears the dungeon, the parties behind it wait forever.
+- *Priority rules.* Preferring some parties (for example, the newest) lets a steady stream of them push older parties back forever.
+#set text(size: 20pt)
+
+#pagebreak()
+
+#align(center + horizon)[
   = The Design
 ]
 
 #pagebreak()
-== Two Phases
-*Phase 1: Party formation.* A single goroutine groups the queued players into $k = min(t, h, floor(d / 3))$ full parties, all at once, before any instance starts.
+== Two-step Algorithm
+*1: Party formation.* A single goroutine groups the queued players into $k = min(t, h, floor(d / 3))$ full parties, all at once, before any instance starts.
 
-*Phase 2: Dungeon runs.* The $k$ parties go on one buffered channel in queue order. $n$ instance goroutines each take the next party, clear the dungeon, and repeat until the channel is empty.
+*2: Dungeon runs.* The $k$ parties go on one buffered channel in queue order. $n$ instance goroutines each take the next party, clear the dungeon, and repeat until the channel is empty.
 
 #align(center)[
   #text(size: 16pt)[
@@ -99,34 +149,6 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
     ```
   ]
 ]
-
-#pagebreak()
-== Code Organization
-#grid(
-  columns: (1fr, 1.2fr),
-  gutter: 24pt,
-  [
-    #highlighted-code(size: 13pt)[
-      ```text
-      group_synchronization/
-        config
-        cmd/lfg/main.go
-        options/config.go
-        lfg/party.go
-        lfg/queue.go
-        lfg/instance.go
-        lfg/report.go
-        util/timer.go
-      ```
-    ]],
-  [
-    - `options`: reads and validates the six inputs
-    - `lfg/party.go`: Phase 1, party formation
-    - `lfg/queue.go`: Phase 2, the channel and instance goroutines
-    - `lfg/instance.go`: shared instance state, guarded by a mutex
-    - `lfg/report.go`: status board and summary
-  ],
-)
 
 #pagebreak()
 == Input Validation
@@ -171,7 +193,7 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
 )
 
 #pagebreak()
-== Phase 1: `FormParties`
+== Grouping into Parties with `FormParties`
 #grid(
   columns: (1.5fr, 1fr),
   gutter: 24pt,
@@ -206,7 +228,7 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
 )
 
 #pagebreak()
-== Phase 2: Filling the Queue
+== Putting Parties into Dungeons
 #grid(
   columns: (1.5fr, 1fr),
   gutter: 24pt,
@@ -227,16 +249,21 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
         }
         close(queue)
 
-        b := newBoard(cfg.Instances)
-        printBoard(b.instances)
+        d := newDungeon(cfg.Instances)
+        printDungeon(d.instances)
 
         // Run continued
       ```
     ]],
   [
-    The channel is buffered to $k$, so every party is queued up front (all players arrive at once).
+    #set text(size: 16pt)
+    `make(chan Party, ...)` creates a channel with room for all $k$ parties, so every party is queued up front (all players arrive at once).
 
-    Closing the channel tells the instances that no more parties will come.
+    `queue <- p` means *send* `p` into the channel. The arrow points the way the data flows.
+
+    `close(queue)` means no more sends. The instances still receive what is left, then stop.
+
+    #text(size: 13pt, fill: rgb("#6b7280"))[*Note:* a slice/array behind a mutex would work too. A channel is that same locked FIFO, built into Go]
   ],
 )
 
@@ -253,13 +280,13 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
           wg.Add(1)
           go func(idx int) {
             defer wg.Done()
-            b.serve(idx, queue, cfg.MinClear, cfg.MaxClear)
+            d.serve(idx, queue, cfg.MinClear, cfg.MaxClear)
           }(i)
         }
 
         wg.Wait()
 
-        final := b.snapshot()
+        final := d.snapshot()
         printSummary(final)
 
         return final, nil
@@ -281,13 +308,13 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
   [
     #highlighted-code(size: 11pt, lines: (2,))[
       ```go
-      func (b *board) serve(idx int, queue <-chan Party, t1, t2 int) {
+      func (d *dungeon) serve(idx int, queue <-chan Party, t1, t2 int) {
         for p := range queue {
           clear := clearTime(t1, t2)
 
-          b.enter(idx, p, clear)
+          d.enter(idx, p, clear)
           time.Sleep(clear)
-          b.leave(idx, p, clear)
+          d.leave(idx, p, clear)
         }
       }
 
@@ -304,32 +331,32 @@ An MMORPG queues tank, healer and DPS players and sends them into dungeon instan
 )
 
 #pagebreak()
-== Shared State: The Board
+== Shared State: The Dungeon
 #grid(
   columns: (1.5fr, 1fr),
   gutter: 24pt,
   [
     #highlighted-code(size: 10pt, lines: (2, 3))[
       ```go
-      func (b *board) leave(idx int, p Party, clear time.Duration) {
-        b.mu.Lock()
-        defer b.mu.Unlock()
+      func (d *dungeon) leave(idx int, p Party, clear time.Duration) {
+        d.mu.Lock()
+        defer d.mu.Unlock()
 
-        inst := &b.instances[idx]
+        inst := &d.instances[idx]
         inst.Status = Empty
         inst.PartyID = 0
         inst.Served++
         inst.TimeServed += clear
 
-        printEvent(time.Since(b.start), "Party %d cleared instance %d", p.ID, inst.ID)
-        printBoard(b.instances)
+        printEvent(time.Since(d.start), "Party %d cleared instance %d", p.ID, inst.ID)
+        printDungeon(d.instances)
       }
       ```
     ]],
   [
     One mutex guards all instance state. `enter` works the same way.
 
-    The board is printed *while the lock is held*, so every board is a consistent snapshot and two boards never interleave.
+    The instance statuses are printed *while the lock is held*, so every printout is a consistent snapshot and two printouts never interleave.
 
     The lock is held only briefly and is never held across a channel receive or a sleep.
   ],
@@ -434,7 +461,6 @@ Leftover players (for example, a 6th tank with no healer) are not starved by the
       [`3 1 1 3 5 2`], [Rejected: `t1` must not be greater than `t2`],
     )
   ]
-  #text(size: 11pt, fill: rgb("#6b7280"))[All runs pass `go run -race` with no data races reported.]
 ]
 
 #pagebreak()
@@ -442,4 +468,4 @@ Leftover players (for example, a 6th tank with no healer) are not starved by the
 - Forming parties up front, in one step, removes hold-and-wait, which is the usual source of deadlock in this problem.
 - A fixed pool of $n$ instance goroutines enforces the concurrency limit without a counting semaphore.
 - A FIFO channel and bounded clear times guarantee that every formed party is served.
-- One mutex, held only for short updates and the board print, keeps the status output consistent.
+- One mutex, held only for short updates and the status print, keeps the status output consistent.

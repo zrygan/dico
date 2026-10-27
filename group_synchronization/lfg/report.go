@@ -24,9 +24,9 @@ func printEvent(elapsed time.Duration, format string, args ...any) {
 	fmt.Printf("[%6.2fs] %s\n", elapsed.Seconds(), fmt.Sprintf(format, args...))
 }
 
-// printBoard prints the status of every instance. Callers that share the
-// board must hold its lock.
-func printBoard(instances []Instance) {
+// printDungeon prints the status of every instance. Callers that share the
+// dungeon must hold its lock.
+func printDungeon(instances []Instance) {
 	for _, inst := range instances {
 		if inst.Status == Active {
 			fmt.Printf("          Instance %d: %v (party %d)\n", inst.ID, inst.Status, inst.PartyID)

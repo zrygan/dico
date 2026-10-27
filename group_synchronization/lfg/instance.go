@@ -14,7 +14,7 @@ const (
 	Active
 )
 
-// String returns "empty" or "active", the labels used in the status board.
+// String returns "empty" or "active", the labels used in the instance status output.
 func (s Status) String() string {
 	if s == Active {
 		return "active"
@@ -31,57 +31,58 @@ type Instance struct {
 	TimeServed time.Duration // sum of the clear times of those parties
 }
 
-// board is the shared state of all instances. mu guards instances, and the
-// board is printed while mu is held so updates never interleave.
-type board struct {
+// dungeon is the shared state of all instances of the dungeon. mu guards
+// instances, and their status is printed while mu is held so updates never
+// interleave.
+type dungeon struct {
 	mu        sync.Mutex
 	instances []Instance
 	start     time.Time
 }
 
-func newBoard(n int) *board {
-	b := &board{
+func newDungeon(n int) *dungeon {
+	d := &dungeon{
 		instances: make([]Instance, n),
 		start:     time.Now(),
 	}
-	for i := range b.instances {
-		b.instances[i].ID = i + 1
+	for i := range d.instances {
+		d.instances[i].ID = i + 1
 	}
-	return b
+	return d
 }
 
 // enter marks instance idx as active with party p inside.
-func (b *board) enter(idx int, p Party, clear time.Duration) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (d *dungeon) enter(idx int, p Party, clear time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	inst := &b.instances[idx]
+	inst := &d.instances[idx]
 	inst.Status = Active
 	inst.PartyID = p.ID
 
-	printEvent(time.Since(b.start), "Party %d entered instance %d (clear time %v)", p.ID, inst.ID, clear)
-	printBoard(b.instances)
+	printEvent(time.Since(d.start), "Party %d entered instance %d (clear time %v)", p.ID, inst.ID, clear)
+	printDungeon(d.instances)
 }
 
 // leave marks instance idx as empty and adds the finished clear to its totals.
-func (b *board) leave(idx int, p Party, clear time.Duration) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (d *dungeon) leave(idx int, p Party, clear time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	inst := &b.instances[idx]
+	inst := &d.instances[idx]
 	inst.Status = Empty
 	inst.PartyID = 0
 	inst.Served++
 	inst.TimeServed += clear
 
-	printEvent(time.Since(b.start), "Party %d cleared instance %d", p.ID, inst.ID)
-	printBoard(b.instances)
+	printEvent(time.Since(d.start), "Party %d cleared instance %d", p.ID, inst.ID)
+	printDungeon(d.instances)
 }
 
 // snapshot returns a copy of every instance's current state.
-func (b *board) snapshot() []Instance {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (d *dungeon) snapshot() []Instance {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	return append([]Instance(nil), b.instances...)
+	return append([]Instance(nil), d.instances...)
 }

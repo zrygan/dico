@@ -9,7 +9,7 @@ import (
 )
 
 // Run forms parties from the queued players and runs them through
-// cfg.Instances dungeon instances, printing the status board on every change
+// cfg.Instances dungeon instances, printing the status of every instance on every change
 // and a summary at the end. It returns the final state of every instance.
 //
 // All parties are put on one buffered channel, in queue order, before any
@@ -35,21 +35,21 @@ func Run(cfg options.Config) ([]Instance, error) {
 	}
 	close(queue)
 
-	b := newBoard(cfg.Instances)
-	printBoard(b.instances)
+	d := newDungeon(cfg.Instances)
+	printDungeon(d.instances)
 
 	var wg sync.WaitGroup
 	for i := range cfg.Instances {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			b.serve(idx, queue, cfg.MinClear, cfg.MaxClear)
+			d.serve(idx, queue, cfg.MinClear, cfg.MaxClear)
 		}(i)
 	}
 
 	wg.Wait()
 
-	final := b.snapshot()
+	final := d.snapshot()
 	printSummary(final)
 
 	return final, nil
@@ -57,13 +57,13 @@ func Run(cfg options.Config) ([]Instance, error) {
 
 // serve runs instance idx: it takes parties from queue one at a time and
 // keeps each inside for a random clear time in [t1, t2] seconds.
-func (b *board) serve(idx int, queue <-chan Party, t1, t2 int) {
+func (d *dungeon) serve(idx int, queue <-chan Party, t1, t2 int) {
 	for p := range queue {
 		clear := clearTime(t1, t2)
 
-		b.enter(idx, p, clear)
+		d.enter(idx, p, clear)
 		time.Sleep(clear)
-		b.leave(idx, p, clear)
+		d.leave(idx, p, clear)
 	}
 }
 
