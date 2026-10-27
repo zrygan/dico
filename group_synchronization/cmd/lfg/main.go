@@ -1,4 +1,3 @@
-// Command lfg runs the LFG dungeon queue with the values in the config file.
 package main
 
 import (
